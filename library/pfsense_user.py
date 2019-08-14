@@ -170,15 +170,17 @@ def run_module():
                 configuration += "{}['bcrypt-hash'] = {};\n".format(dest, sanitize(params['password']))
 
         # Update user privileges. FIXME: Validate privilege names!
-        if current_user.get('priv') != params['priv']:
-            configuration += "{}['priv'] = {};\n".format(dest, sanitize(params['priv']))
+        priv = params.priv or []
+        if current_user.get('priv') != priv:
+            configuration += "{}['priv'] = {};\n".format(dest, sanitize(priv))
 
         # If creating a new user, append user array to config.
         if index == '':
             configuration += "{} = $user;\n".format(base)
 
         # Validate group names.
-        for group_name in params['groups']:
+        group_names = params['groups'] or []
+        for group_name in group_names:
             group_index = search(system['group'], 'name', group_name)
             if group_index == '':
                 module.fail_json(msg='Group "{}" not found'.format(group_name))
@@ -188,10 +190,10 @@ def run_module():
             if group['name'] == 'all':
                 continue
             # Add user to specified groups where not already a member.
-            if uid not in group.get('member', []) and group['name'] in params['groups']:
+            if uid not in group.get('member', []) and group['name'] in group_names:
                 configuration += "$config['system']['group'][{}]['member'][] = {};\n".format(group_index, sanitize(uid))
             # Remove user from any other groups when append is False.
-            if uid in group.get('member', []) and group['name'] not in params['groups'] and not params['append']:
+            if uid in group.get('member', []) and group['name'] not in group_names and not params['append']:
                 group_members = [x for x in group.get('member', []) if x != uid]
                 configuration += "$config['system']['group'][{}]['member'] = {};\n".format(group_index, sanitize(group_members))
 
