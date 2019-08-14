@@ -170,7 +170,7 @@ def run_module():
                 configuration += "{}['bcrypt-hash'] = {};\n".format(dest, sanitize(params['password']))
 
         # Update user privileges. FIXME: Validate privilege names!
-        priv = params.priv or []
+        priv = params['priv'] or []
         if current_user.get('priv') != priv:
             configuration += "{}['priv'] = {};\n".format(dest, sanitize(priv))
 
