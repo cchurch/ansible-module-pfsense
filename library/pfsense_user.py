@@ -170,9 +170,11 @@ def run_module():
                 configuration += "{}['bcrypt-hash'] = {};\n".format(dest, sanitize(params['password']))
 
         # Update user privileges. FIXME: Validate privilege names!
-        priv = params['priv'] or []
-        if current_user.get('priv') != priv:
-            configuration += "{}['priv'] = {};\n".format(dest, sanitize(priv))
+        if current_user.get('priv') != params['priv']:
+            if params['priv']:
+                configuration += "{}['priv'] = {};\n".format(dest, sanitize(params['priv']))
+            else:
+                configuration += "unset({}['priv']);\n".format(dest)
 
         # If creating a new user, append user array to config.
         if index == '':
