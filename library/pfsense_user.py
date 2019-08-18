@@ -178,7 +178,11 @@ def run_module():
 
         # If creating a new user, append user array to config.
         if index == '':
-            configuration += "{} = $user;\n".format(base)
+            configuration += "{} = {};\n".format(base, dest)
+
+        # Apply local user changes.
+        if configuration:
+            configuration += "local_user_set({});\n".format(dest)
 
         # Validate group names.
         group_names = params['groups'] or []
@@ -194,16 +198,22 @@ def run_module():
             # Add user to specified groups where not already a member.
             if uid not in group.get('member', []) and group['name'] in group_names:
                 configuration += "$config['system']['group'][{}]['member'][] = {};\n".format(group_index, sanitize(uid))
+                configuration += "local_group_set($config['system']['group'][{}]);\n".format(group_index)
             # Remove user from any other groups when append is False.
             if uid in group.get('member', []) and group['name'] not in group_names and not params['append']:
                 group_members = [x for x in group.get('member', []) if x != uid]
                 configuration += "$config['system']['group'][{}]['member'] = {};\n".format(group_index, sanitize(group_members))
+                configuration += "local_group_set($config['system']['group'][{}]);\n".format(group_index)
 
     elif params['state'] == 'absent':
         if index != '':
+            configuration += "local_user_del({});\n".format(base)
             configuration += "unset({});\n".format(base)
     else:
         module.fail_json(msg='Incorrect state value, possible choices: absent, present(default)')
+
+    if configuration:
+        configuration = "include_once('auth.inc');\n" + configuration
 
     result['phpcode'] = configuration
 
