@@ -356,7 +356,9 @@ def run_module():
     
     if do_write:
         new_content = serialize(existing_keys)
+        configuration += "include_once('auth.inc');\n"
         configuration += "{}['authorizedkeys'] = '{}';\n".format(base, base64.b64encode(new_content))
+        configuration += "local_user_set({});\n".format(base)
 
     result['phpcode'] = configuration
 
