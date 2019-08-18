@@ -124,14 +124,20 @@ def run_module():
             configuration += "$group['gid']='" + gid + "';\n"
             configuration += "$group['priv']=['"+"','".join(priv)+"'];\n"
             configuration += base + "=$group;\n"
+            configuration += "local_group_set($group);\n"
         elif set(system['group'][index]['priv']) != set(priv):
             configuration += base + "['priv']=['"+"','".join(priv)+"'];\n"
+            configuration += "local_group_set(" + base + ");\n"
 
     elif params['state'] == 'absent':
         if index != '':
+            configuration += "local_group_del(" + base + ");\n"
             configuration += "unset("+base+");\n"
     else:
         module.fail_json(msg='Incorrect state value, possible choices: absent, present(default)')
+
+    if configuration:
+        configuration = "include_once('auth.inc');\n" + configuration
 
     result['phpcode'] = configuration
 
