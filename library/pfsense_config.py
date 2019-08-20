@@ -182,8 +182,19 @@ def run_module():
                 # Check that key exists in config (unless we are allowing key create "safe: no")
                 if (key in result[section]) or AllowCreateKeys:
 
+                    # None Type
+                    if type(params[section][key]) is type(None):
+                        # Validate Data type provided matches existing config
+                        if (key in result[section]):
+                            if type(result[section][key]) not in [str,unicode]:
+                                module.fail_json(msg=section + ":" + key + " requires " + str(type(result[section][key])) + " or null")
+                        # If provided key value is null, remove the key.
+                        if key in result[section] and params[section][key] is None:
+                            configuration += "unset($config['" + section + "']['" + key + "']);\n"
+                            del result[section][key]
+
                     # String Type
-                    if type(params[section][key]) is str:
+                    elif type(params[section][key]) is str:
                         # Validate Data type provided matches existing config
                         if (key in result[section]):
                             if type(result[section][key]) not in [str,unicode]:
