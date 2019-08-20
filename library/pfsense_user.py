@@ -105,6 +105,7 @@ def run_module():
         priv=dict(required=False, type='list', aliases=['privs', 'privileges']),
         password=dict(required=False, no_log=True),
         update_password=dict(required=False, type='bool', default=False),
+        set_initial_password=dict(required=False, type='bool', default=True),
         state=dict(required=False, default='present', choices=['present', 'absent']),
     )
 
@@ -168,6 +169,22 @@ def run_module():
                 module.fail_json(msg='Password must be provided as a bcrypt hash.')
             if current_user.get('bcrypt-hash') != params['password']:
                 configuration += "{}['bcrypt-hash'] = {};\n".format(dest, sanitize(params['password']))
+        # Set an initial password for a user if no password is set; store the
+        # password in ~/initial-password so it can be retrieved via SSH.
+        elif params['set_initial_password'] and not current_user.get('bcrypt-hash'):
+            configuration += "$initial_password_path = '/home/' . {}['name'] . '/initial-password';".format(dest)
+            configuration += "if (file_exists($initial_password_path)) {\n";
+            configuration += "  $initial_password = file_get_contents($initial_password_path);\n"
+            configuration += "}\n"
+            configuration += "if (empty($initial_password)) {\n";
+            configuration += "  $initial_password = implode(array_map(function($c) { return chr(ord($c) % 92 + 33); }, str_split(openssl_random_pseudo_bytes(15))));\n"
+            configuration += "}\n"
+            configuration += "local_user_set_password({}, $initial_password);\n".format(dest)
+            configuration += "@mkdir(dirname($initial_password_path), 0755, true);\n"
+            configuration += "@file_put_contents($initial_password_path, $initial_password);\n"
+            configuration += "@chmod($initial_password_path, 0700);\n"
+            configuration += "@chgrp($initial_password_path, 'nobody');\n"
+            configuration += "@chown($initial_password_path, {});\n".format(uid)
 
         # Update user privileges. FIXME: Validate privilege names!
         if current_user.get('priv') != params['priv']:
