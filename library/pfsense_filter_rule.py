@@ -89,7 +89,16 @@ phpcode:
 '''
 
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.pfsense import write_config, read_config, search, pfsense_check
+from ansible.module_utils.pfsense import write_config, read_config, pfsense_check
+
+
+def search(module, elements, key, val):
+
+    if type(elements) in [dict,list]:   
+        for k,v in enumerate(elements):
+            if v[key] == val:
+                return k
+    return ""
 
 
 def run_module():
@@ -132,7 +141,7 @@ def run_module():
 
     # get config and find our rule
     cfg = read_config(module,'filter')
-    index = search(module,cfg['rule'],'tracker',params['tracker'])
+    index = search(module, cfg['rule'], 'tracker', params['tracker'])
 
     base = "$config['filter']['rule'][" + str(index) + "]"
 
@@ -150,7 +159,7 @@ def run_module():
 
         for p in ['type','tracker','ipprotocol','interface','direction','statetype']:
             configuration += "$rule['" + p + "'] = '" + params[p] + "';\n"
-            if index=='' or (str(params[p]) != str(cfg['rule'][index][p])):
+            if index=='' or (p not in cfg['rule'][index]) or (str(params[p]) != str(cfg['rule'][index][p])):
                 diff = True
                 updated += ":"+p
 
