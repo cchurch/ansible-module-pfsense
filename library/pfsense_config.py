@@ -125,13 +125,14 @@ phpcode:
 '''
 
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.pfsense import write_config, read_config, pfsense_check
+from ansible.module_utils.pfsense import write_config, read_config, safe_php, pfsense_check
 
 
 def run_module():
 
     module_args = dict(
-        safe_mode=dict(default='yes', choices=['yes','no']),
+        safe_mode=dict(type='bool', default=True, required=False),
+        dict_type_validation=dict(type='bool', default=True, required=False),
         snmpd=dict(type=dict),
         syslog=dict(type=dict),
         system=dict(type=dict),
@@ -150,12 +151,11 @@ def run_module():
     )
 
     params = module.params
+    safe_mode = params.pop('safe_mode', True)
+    dict_type_validation = params.pop('dict_type_validation', True)
 
     DoNotCreate = ['rule','cert','user','group','authserver','alias','item','monitor_type','gateway_item','package'];  # Arrays of Dict
-    AllowCreateKeys = False
-    if params['safe_mode'] == 'no':
-        AllowCreateKeys = True
-    del params['safe_mode']
+    AllowCreateKeys = not safe_mode
 
     configuration = ""
 
@@ -174,23 +174,25 @@ def run_module():
 
             # Loop through provided keys in the section
             for key in params[section]:
+                
+                base = "$config['{}'][{}]".format(section, safe_php(key))
 
                 # Check for keys we can't handle here
                 if key in DoNotCreate:
-                    module.fail_json(msg='Cannot create array type, try pfsense_'+key+' module')
+                    module.fail_json(msg='Cannot create array type, try pfsense_{} module'.format(key))
 
                 # Check that key exists in config (unless we are allowing key create "safe: no")
                 if (key in result[section]) or AllowCreateKeys:
 
                     # None Type
                     if type(params[section][key]) is type(None):
-                        # Validate Data type provided matches existing config
+                        # Validate existing config (if present) is a string.
                         if (key in result[section]):
                             if type(result[section][key]) not in [str,unicode]:
                                 module.fail_json(msg=section + ":" + key + " requires " + str(type(result[section][key])) + " or null")
                         # If provided key value is null, remove the key.
                         if key in result[section] and params[section][key] is None:
-                            configuration += "unset($config['" + section + "']['" + key + "']);\n"
+                            configuration += "unset({});\n".format(base)
                             del result[section][key]
 
                     # String Type
@@ -201,7 +203,7 @@ def run_module():
                                 module.fail_json(msg=section + ":" + key + " requires " + str(type(result[section][key])))
                         # Update if changed
                         if not key in result[section] or str(result[section][key]) != params[section][key]:
-                            configuration += "$config['" + section + "']['" + key + "']='" + params[section][key] + "';\n"
+                            configuration += "{} = {};\n".format(base, safe_php(params[section][key]))
                             result[section][key] = params[section][key]
 
                     # List Type
@@ -212,28 +214,30 @@ def run_module():
                                 module.fail_json(msg=section + ":" + key + " requires " + str(type(result[section][key])))
                         # Update if changed
                         if set(result[section][key]) != set(params[section][key]):
-                            configuration += "$config['" + section + "']['" + key + "']=['"+"','".join(params[section][key])+"'];\n"
+                            configuration += "{} = {};\n".format(base, safe_php(params[section][key]))
                             result[section][key] = params[section][key]
 
                     # Dict Type
                     elif type(params[section][key]) is dict:
                         # Validate Data type provided matches existing config
-                        if (key in result[section]):
+                        if key in result[section]:
                             if type(result[section][key]) is not dict:
                                 module.fail_json(msg=section + ":" + key + " requires " + str(type(result[section][key])))
                         # Loop thru subkeys k in dict
-                        for (k,v) in params[section][key].iteritems():
-                            if (k in result[section][key]) or AllowCreateKeys:
+                        for k, v in params[section][key].items():
+                            if k in result[section][key] or AllowCreateKeys:
                                 # Type validation
-                                if (k in result[section][key]):
-                                    if type(result[section][key][k]) not in [str,unicode]:
-                                        module.fail_json(msg="String expected in config at "+section + ":" + key + ":" + k + " " + str(type(result[section][key][k])) + " found")
-                                if type(v) is not str:
-                                    module.fail_json(msg="String value expected in "+section + ":" + key + ":" + k)
+                                if dict_type_validation:
+                                    if k in result[section][key]:
+                                        if type(result[section][key][k]) not in [str,unicode]:
+                                            module.fail_json(msg="String expected in config at "+section + ":" + key + ":" + k + " " + str(type(result[section][key][k])) + " found")
+                                    if type(v) is not str:
+                                        module.fail_json(msg="String value expected in "+section + ":" + key + ":" + k)
                                 # Update if changed
-                                if not k in  result[section][key] or result[section][key][k] != params[section][key][k]:
-                                    configuration += "$config['" + section + "']['" + key + "']['" + k + "'] = '" + v.replace("'","\\'") + "';\n"
-                                    result[section][key][k]=v
+                                # FIXME: Better merging of nested items!
+                                if k not in result[section][key] or result[section][key][k] != params[section][key][k]:
+                                    configuration += "{}[{}] = {};\n".format(base, safe_php(k), safe_php(v))
+                                    result[section][key][k] = v
                             else:
                                 module.fail_json(msg='SubKey: '+k+' not found in '+section+":"+key+'. Cannot create new keys in safe mode')
                     else:
@@ -252,7 +256,7 @@ def run_module():
 
     for section in params:
         if type(params[section]) is dict:
-            result[section] = read_config(module,section)
+            result[section] = read_config(module, section)
 
     module.exit_json(**result)
 
