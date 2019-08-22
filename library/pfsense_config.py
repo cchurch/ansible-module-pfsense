@@ -139,6 +139,7 @@ def run_module():
         widgets=dict(type=dict),
         hasync=dict(type=dict),
         nat=dict(type=dict),
+        notifications=dict(type=dict),
     )
 
     result = dict(
