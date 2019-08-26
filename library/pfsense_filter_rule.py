@@ -165,7 +165,10 @@ def run_module():
 
         for p in ['descr','log','disabled','quick','protocol','icmptype']:
             if type(params[p]) in [str,unicode]:
-                configuration += "$rule['" + p + "'] = '" + params[p] + "';\n"
+                if p == 'protocol' and params[p] == 'any':
+                    configuration += "$rule['" + p + "'] = '';\n"
+                else:
+                    configuration += "$rule['" + p + "'] = '" + params[p] + "';\n"
                 if index=='' or (p not in cfg['rule'][index]) or (str(params[p]) != str(cfg['rule'][index][p])):
                     diff = True
                     updated += ":"+p
