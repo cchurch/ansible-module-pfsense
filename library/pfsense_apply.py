@@ -43,6 +43,7 @@ e.g.
         unbound
         restart_webgui
         frr
+        reload_sshd
     required: true
 
 author:
@@ -159,6 +160,9 @@ def run_module():
    
     if 'restart_webgui' in services or DoAll:
         configuration += "system_webgui_start();\n"
+
+    if 'reload_sshd' in services or DoAll:
+        configuration += "send_event('service reload sshd');\n"
 
   #  if '' in services or DoAll:
   #      configuration += 
